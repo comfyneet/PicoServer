@@ -9,7 +9,7 @@
 
 namespace ps
 {
-    class PS_API request : public non_copyable
+    class PS_API request : public virtual non_copyable
     {
     public:
         request() = delete;
@@ -21,24 +21,26 @@ namespace ps
             const std::map<std::string, std::string>& headers,
             const std::optional<std::vector<char>>& body,
             const std::optional<std::vector<std::string>>& uri_matches = std::nullopt) :
-            method_{ method },
-            uri_{ uri },
-            http_version_{ http_version },
-            headers_{ headers },
-            body_{ body },
-            uri_matches_{ uri_matches }
+            method_{method},
+            uri_{uri},
+            http_version_{http_version},
+            headers_{headers},
+            body_{body},
+            uri_matches_{uri_matches}
         {
         }
 
         request(const request& request) :
-            method_{ request.method_ },
-            uri_{ request.uri_ },
-            http_version_{ request.http_version_ },
-            headers_{ request.headers_ },
-            body_{ request.body_ },
-            uri_matches_{ request.uri_matches_ }
+            method_{request.method_},
+            uri_{request.uri_},
+            http_version_{request.http_version_},
+            headers_{request.headers_},
+            body_{request.body_},
+            uri_matches_{request.uri_matches_}
         {
         }
+
+        virtual ~request() = default;
 
         const std::string& get_method() const { return method_; }
 

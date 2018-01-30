@@ -10,20 +10,18 @@
 
 namespace ps
 {
-    class request;
-    class response;
-    class session;
+    class context;
 
-    class PS_API server : public non_copyable
+    class PS_API server : public virtual non_copyable
     {
     public:
         server(uint16_t port, uint32_t backlog);
 
         virtual ~server();
 
-        void add_default_route(const std::function<void(const request&, const response&)>& action);
+        void add_default_route(const std::function<void(const context&)>& context);
 
-        void add_get_route(const std::string& route_name, const std::function<void(const request&, const response&)>& action);
+        void map_get_route(const std::string& template_name, const std::function<void(const context&)>& context);
 
         void start();
 
@@ -32,11 +30,11 @@ namespace ps
     private:
         void run(socket_handle socket, const std::string& ip) const;
 
-        std::function<void(const request&, const response&)> default_route_;
+        std::function<void(const context&)> default_route_;
 
-        std::map<std::string, std::function<void(const request&, const response&)>> get_routes_;
+        std::map<std::string, std::function<void(const context&)>> get_routes_;
 
-        //std::map<std::string, std::function<void(const request&, const response&)>> post_routes_;
+        //std::map<std::string, std::function<void(const context&)>> post_routes_;
 
         uint16_t port_;
 

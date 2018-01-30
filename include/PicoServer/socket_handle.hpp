@@ -5,7 +5,7 @@
 
 #ifdef PS_WINDOWS
 #include <WinSock2.h>
-    typedef SOCKET socket_handle;
+typedef SOCKET socket_handle;
 #else
     typedef int socket_handle;
 #endif

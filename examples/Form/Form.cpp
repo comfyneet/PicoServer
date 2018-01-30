@@ -8,7 +8,7 @@ int main()
     {
         ps::server server(80, 10);
 
-        server.add_get_route("^/info$", [](const ps::request&, const ps::response&)
+        server.map_get_route("^/info$", [](const ps::context&)
         {
             //response.append("a");
         });

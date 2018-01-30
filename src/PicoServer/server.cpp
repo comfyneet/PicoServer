@@ -9,6 +9,7 @@
 #ifdef PS_WINDOWS
 #  include <WS2tcpip.h>
 #endif
+#include "PicoServer/context.hpp"
 #include "PicoServer/request.hpp"
 #include "PicoServer/utils.hpp"
 #include "socket_impl.hpp"
@@ -25,7 +26,7 @@ namespace priv
 
     request receive_request(socket_handle socket);
 
-    void send_response(socket_handle socket, const std::function<void(const request&, const response&)>& action);
+    void send_response(socket_handle socket, const std::function<void(const context&)>& context);
 
 #ifdef PS_WINDOWS
     constexpr auto flags = 0;
@@ -37,9 +38,9 @@ namespace priv
 namespace ps
 {
     server::server(const uint16_t port, const uint32_t backlog) :
-        port_{ port },
-        listener_{ socket_impl::invalid_socket },
-        running_{ false }
+        port_{port},
+        listener_{socket_impl::invalid_socket},
+        running_{false}
     {
         addrinfo hints{}, *info, *ptr;
 
@@ -91,16 +92,15 @@ namespace ps
             socket_impl::close(listener_);
     }
 
-    void server::add_default_route(const std::function<void(const request&, const response&)>& action)
+    void server::add_default_route(const std::function<void(const context&)>& context)
     {
-        default_route_ = action;
+        default_route_ = context;
     }
 
-    void server::add_get_route(const std::string& route_name, const std::function<void(const request&, const response&)>& action)
+    void server::map_get_route(const std::string& template_name, const std::function<void(const context&)>& context)
     {
-        get_routes_[route_name] = action;
+        get_routes_[template_name] = context;
     }
-
 
     void server::start()
     {
@@ -140,7 +140,7 @@ namespace ps
 
     void server::run(const socket_handle socket, const std::string&) const
     {
-         auto request = priv::receive_request(socket);
+        auto request = priv::receive_request(socket);
 
         if (request.get_method() == "GET")
         {
@@ -150,7 +150,8 @@ namespace ps
                 if (std::regex_match(request.get_uri(), sm, std::regex(route.first)))
                 {
                     std::vector<std::string> matches;
-                    for (const auto& match : sm) {
+                    for (const auto& match : sm)
+                    {
                         matches.push_back(match);
                     }
                     request.set_uri_matches(matches);
@@ -167,7 +168,8 @@ namespace ps
 
 namespace priv
 {
-    void parse_request_line(const socket_handle socket, std::string& method, std::string& uri, std::string& http_version)
+    void parse_request_line(const socket_handle socket, std::string& method, std::string& uri,
+                            std::string& http_version)
     {
         auto last = '\0';
         auto method_flag = true;
@@ -298,7 +300,7 @@ namespace priv
         return request(method, uri, http_verson, headers, optional_body);
     }
 
-    void send_response(const socket_handle socket, const std::function<void(const request&, const response&)>&)
+    void send_response(const socket_handle socket, const std::function<void(const context&)>&)
     {
         std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body></body></html>";
         //std::string response;

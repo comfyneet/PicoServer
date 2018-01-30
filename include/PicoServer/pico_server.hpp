@@ -2,6 +2,7 @@
 #define PS_PICO_SERVER_HPP
 
 #include "PicoServer/config.hpp"
+#include "PicoServer/context.hpp"
 #include "PicoServer/non_copyable.hpp"
 #include "PicoServer/request.hpp"
 #include "PicoServer/response.hpp"

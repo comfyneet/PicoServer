@@ -9,7 +9,7 @@
 
 namespace ps
 {
-    class PS_API response : public non_copyable
+    class PS_API response : public virtual non_copyable
     {
     public:
         static std::optional<std::string> get_reason_phrase(int32_t status_code);
@@ -18,6 +18,8 @@ namespace ps
             status_code_{}
         {
         }
+
+        virtual ~response() = default;
 
         void append(const std::string& content);
 
