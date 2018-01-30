@@ -19,9 +19,9 @@ namespace ps
 
         virtual ~server();
 
-        void add_default_route(const std::function<void(const context&)>& context);
+        void add_default_route(const std::function<void(context&)>& func);
 
-        void map_get_route(const std::string& template_name, const std::function<void(const context&)>& context);
+        void map_get_route(const std::string& template_name, const std::function<void(context&)>& func);
 
         void start();
 
@@ -30,11 +30,11 @@ namespace ps
     private:
         void run(socket_handle socket, const std::string& ip) const;
 
-        std::function<void(const context&)> default_route_;
+        std::function<void(context&)> default_route_;
 
-        std::map<std::string, std::function<void(const context&)>> get_routes_;
+        std::map<std::string, std::function<void(context&)>> get_routes_;
 
-        //std::map<std::string, std::function<void(const context&)>> post_routes_;
+        //std::map<std::string, std::function<void(context&)>> post_routes_;
 
         uint16_t port_;
 

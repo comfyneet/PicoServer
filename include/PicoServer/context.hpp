@@ -1,27 +1,31 @@
 #ifndef PS_CONTEXT_HPP
 #define PS_CONTEXT_HPP
 
-#include <memory>
 #include "PicoServer/config.hpp"
 #include "PicoServer/non_copyable.hpp"
+#include "PicoServer/request.hpp"
+#include "PicoServer/response.hpp"
 
 namespace ps
 {
-    class request;
-    class response;
-
     class PS_API context : public virtual non_copyable
     {
     public:
+        context(const request& request, const response& response) :
+            request_{request},
+            response_{response}
+        {
+        }
+
         virtual ~context() = default;
 
-        const request& get_request() const { return *request_; }
+        const request& get_request() const { return request_; }
 
-        const response& get_response() const { return *response_; }
+        response& get_response() { return response_; }
 
     private:
-        std::unique_ptr<request> request_;
-        std::unique_ptr<response> response_;
+        request request_;
+        response response_;
     };
 }
 

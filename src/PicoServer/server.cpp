@@ -11,6 +11,7 @@
 #endif
 #include "PicoServer/context.hpp"
 #include "PicoServer/request.hpp"
+#include "PicoServer/status_code.hpp"
 #include "PicoServer/utils.hpp"
 #include "socket_impl.hpp"
 
@@ -26,7 +27,7 @@ namespace priv
 
     request receive_request(socket_handle socket);
 
-    void send_response(socket_handle socket, const std::function<void(const context&)>& context);
+    void send_response(socket_handle socket, context& context);
 
 #ifdef PS_WINDOWS
     constexpr auto flags = 0;
@@ -92,14 +93,14 @@ namespace ps
             socket_impl::close(listener_);
     }
 
-    void server::add_default_route(const std::function<void(const context&)>& context)
+    void server::add_default_route(const std::function<void(context&)>& func)
     {
-        default_route_ = context;
+        default_route_ = func;
     }
 
-    void server::map_get_route(const std::string& template_name, const std::function<void(const context&)>& context)
+    void server::map_get_route(const std::string& template_name, const std::function<void(context&)>& func)
     {
-        get_routes_[template_name] = context;
+        get_routes_[template_name] = func;
     }
 
     void server::start()
@@ -141,25 +142,29 @@ namespace ps
     void server::run(const socket_handle socket, const std::string&) const
     {
         auto request = priv::receive_request(socket);
+        std::optional<std::function<void(context&)>> func;
 
         if (request.get_method() == "GET")
-        {
-            for (const auto& route : get_routes_)
+            for (const auto& get_route : get_routes_)
             {
                 std::smatch sm;
-                if (std::regex_match(request.get_uri(), sm, std::regex(route.first)))
+                if (std::regex_match(request.get_uri(), sm, std::regex(get_route.first)))
                 {
                     std::vector<std::string> matches;
                     for (const auto& match : sm)
-                    {
                         matches.push_back(match);
-                    }
                     request.set_uri_matches(matches);
-                    priv::send_response(socket, route.second);
-
+                    func = get_route.second;
                     break;
                 }
             }
+
+        if (func)
+        {
+            response response(status_code::ok, "");
+            context context(request, response);
+            (*func)(context);
+            priv::send_response(socket, context);
         }
 
         socket_impl::close(socket);
@@ -168,8 +173,11 @@ namespace ps
 
 namespace priv
 {
-    void parse_request_line(const socket_handle socket, std::string& method, std::string& uri,
-                            std::string& http_version)
+    void parse_request_line(
+        const socket_handle socket,
+        std::string& method,
+        std::string& uri,
+        std::string& http_version)
     {
         auto last = '\0';
         auto method_flag = true;
@@ -297,13 +305,16 @@ namespace priv
         }
         const auto optional_body = !body.empty() ? body : std::optional<std::vector<char>>{};
 
-        return request(method, uri, http_verson, headers, optional_body);
+        return request(method, uri, http_verson, headers, optional_body, std::nullopt);
     }
 
-    void send_response(const socket_handle socket, const std::function<void(const context&)>&)
+    void send_response(const socket_handle socket, context& context)
     {
-        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body></body></html>";
-        //std::string response;
+        const auto code = static_cast<std::underlying_type_t<status_code>>(context.get_response().get_status_code());
+        const auto code_phrase = utils::get_reason_phrase(context.get_response().get_status_code());
+
+        auto response = "HTTP/1.1 " + std::to_string(code) + " " + code_phrase + "\r\n";
+        response += context.get_response().get_content();
 
         size_t all_size_sent = 0;
         const auto length = response.length();

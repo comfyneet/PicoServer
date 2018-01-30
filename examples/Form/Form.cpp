@@ -1,5 +1,5 @@
 #include <iostream>
-#include <thread>
+#include <sstream>
 #include <PicoServer/pico_server.hpp>
 
 int main()
@@ -8,9 +8,14 @@ int main()
     {
         ps::server server(80, 10);
 
-        server.map_get_route("^/info$", [](const ps::context&)
+        server.map_get_route("^/get/([0-9]+)$", [](ps::context& context)
         {
-            //response.append("a");
+            std::stringstream stream;
+            stream << "Content-Type: text/html\r\n\r\n";
+            stream << "<html><body>";
+            stream << *context.get_request().get_uri_match(0);
+            stream << "</body></html>";
+            context.get_response().set_content(stream.str());
         });
 
         server.start();
