@@ -16,12 +16,16 @@ namespace ps
         request() = delete;
 
         request(
+            std::string remote_ip,
+            const uint16_t remote_port,
             std::string method,
             std::string uri,
             std::string http_version,
             std::map<std::string, std::string> headers,
             std::optional<std::vector<char>> body,
             std::optional<std::vector<std::string>> uri_matches) :
+            remote_ip_{std::move(remote_ip)},
+            remote_port_{remote_port},
             method_{std::move(method)},
             uri_{std::move(uri)},
             http_version_{std::move(http_version)},
@@ -32,6 +36,8 @@ namespace ps
         }
 
         request(const request& request) :
+            remote_ip_{request.remote_ip_},
+            remote_port_{request.remote_port_},
             method_{request.method_},
             uri_{request.uri_},
             http_version_{request.http_version_},
@@ -45,6 +51,8 @@ namespace ps
 
         request& operator=(request&& request) noexcept
         {
+            remote_ip_ = std::move(request.remote_ip_);
+            remote_port_ = request.remote_port_;
             method_ = std::move(request.method_);
             uri_ = std::move(request.uri_);
             http_version_ = std::move(request.http_version_);
@@ -55,6 +63,10 @@ namespace ps
             return *this;
         }
 
+        const std::string& get_remote_ip() const { return remote_ip_; }
+
+        uint16_t get_remote_port() const { return remote_port_; }
+
         const std::string& get_method() const { return method_; }
 
         const std::string& get_uri() const { return uri_; }
@@ -63,15 +75,15 @@ namespace ps
 
         const std::map<std::string, std::string>& get_headers() const { return headers_; }
 
-        std::optional<std::string> get_header(const std::string& field) const;
-
         const std::optional<std::vector<char>>& get_body() const { return body_; }
 
         std::optional<std::string> get_uri_match(uint32_t id) const;
 
-        void set_uri_matches(const std::optional<std::vector<std::string>>& uri_matches) { uri_matches_ = uri_matches; }
-
     private:
+        std::string remote_ip_;
+
+        uint16_t remote_port_;
+
         std::string method_;
 
         std::string uri_;

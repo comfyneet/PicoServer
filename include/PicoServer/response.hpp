@@ -1,8 +1,9 @@
 #ifndef PS_RESPONSE_HPP
 #define PS_RESPONSE_HPP
 
+#include <map>
 #include <memory>
-#include <sstream>
+#include <optional>
 #include <string>
 #include <utility>
 #include "PicoServer/config.hpp"
@@ -17,9 +18,11 @@ namespace ps
     public:
         response() = delete;
 
-        response(const status_code status_code, std::string content) :
+        response(const status_code status_code, std::map<std::string, std::string> headers,
+                 std::optional<std::string> body) :
             status_code_{status_code},
-            content_{std::move(content)}
+            headers_{std::move(headers)},
+            body_{std::move(body)}
         {
         }
 
@@ -28,29 +31,30 @@ namespace ps
         response(const response& response)
         {
             status_code_ = response.status_code_;
-            content_ = response.content_;
+            body_ = response.body_;
         }
 
         response& operator=(response&& response) noexcept
         {
             status_code_ = response.status_code_;
-            content_ = std::move(response.content_);
+            headers_ = std::move(response.headers_);
+            body_ = std::move(response.body_);
 
             return *this;
         }
 
         status_code get_status_code() const { return status_code_; }
 
-        const std::string& get_content() const { return content_; }
+        const std::map<std::string, std::string>& get_headers() const { return headers_; }
 
-        void set_status_code(const status_code status_code) { status_code_ = status_code; }
-
-        void set_content(const std::string& content) { content_ = content; }
+        const std::optional<std::string>& get_body() const { return body_; }
 
     private:
         status_code status_code_;
 
-        std::string content_;
+        std::map<std::string, std::string> headers_;
+
+        std::optional<std::string> body_;
     };
 }
 

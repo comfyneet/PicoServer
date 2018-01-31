@@ -9,8 +9,8 @@
 #ifdef PS_WINDOWS
 #  include <WS2tcpip.h>
 #endif
-#include "PicoServer/context.hpp"
 #include "PicoServer/request.hpp"
+#include "PicoServer/response.hpp"
 #include "PicoServer/status_code.hpp"
 #include "PicoServer/utils.hpp"
 #include "socket_impl.hpp"
@@ -25,9 +25,9 @@ namespace priv
 
     void parse_body(socket_handle socket, std::vector<char>& body, size_t length);
 
-    request receive_request(socket_handle socket);
+    request receive_request(socket_handle socket, const std::string& remote_ip, uint16_t remote_port);
 
-    void send_response(socket_handle socket, context& context);
+    void send_response(socket_handle socket, const response& response);
 
 #ifdef PS_WINDOWS
     constexpr auto flags = 0;
@@ -93,14 +93,19 @@ namespace ps
             socket_impl::close(listener_);
     }
 
-    void server::add_default_route(const std::function<void(context&)>& func)
+    void server::add_default_route(const std::function<response(const request&)>& func)
     {
         default_route_ = func;
     }
 
-    void server::map_get_route(const std::string& template_name, const std::function<void(context&)>& func)
+    void server::map_get_route(const std::string& template_name, const std::function<response(const request&)>& func)
     {
         get_routes_[template_name] = func;
+    }
+
+    void server::map_post_route(const std::string& template_name, const std::function<response(const request&)>& func)
+    {
+        post_routes_[template_name] = func;
     }
 
     void server::start()
@@ -122,15 +127,23 @@ namespace ps
 
             const auto sa = reinterpret_cast<sockaddr *>(&connector_addr);
             void* in_addr;
+            uint16_t in_port;
             if (sa->sa_family == AF_INET)
+            {
                 in_addr = &reinterpret_cast<sockaddr_in*>(sa)->sin_addr;
-            else in_addr = &reinterpret_cast<sockaddr_in6*>(sa)->sin6_addr;
+                in_port = reinterpret_cast<sockaddr_in*>(sa)->sin_port;
+            }
+            else
+            {
+                in_addr = &reinterpret_cast<sockaddr_in6*>(sa)->sin6_addr;
+                in_port = reinterpret_cast<sockaddr_in6*>(sa)->sin6_port;
+            }
 
             char ip[INET6_ADDRSTRLEN];
             if (inet_ntop(connector_addr.ss_family, in_addr, ip, sizeof ip) == nullptr)
                 throw std::runtime_error("inet_ntop failed: " + socket_impl::get_error());
 
-            std::thread(&server::run, this, connection_socket, std::string(ip)).detach();
+            std::thread(&server::run, this, connection_socket, std::string(ip), ntohs(in_port)).detach();
         }
     }
 
@@ -139,32 +152,41 @@ namespace ps
         running_ = false;
     }
 
-    void server::run(const socket_handle socket, const std::string&) const
+    void server::run(const socket_handle socket, const std::string& ip, const uint16_t port) const
     {
-        auto request = priv::receive_request(socket);
-        std::optional<std::function<void(context&)>> func;
+        std::optional<std::function<response(const request&)>> func;
+        auto r = priv::receive_request(socket, ip, port);
 
-        if (request.get_method() == "GET")
-            for (const auto& get_route : get_routes_)
+        if (r.get_method() == "GET" || r.get_method() == "POST")
+        {
+            auto routes = r.get_method() == "GET" ? get_routes_ : post_routes_;
+            for (const auto& route : routes)
             {
                 std::smatch sm;
-                if (std::regex_match(request.get_uri(), sm, std::regex(get_route.first)))
+                if (std::regex_match(r.get_uri(), sm, std::regex(route.first)))
                 {
                     std::vector<std::string> matches;
                     for (const auto& match : sm)
                         matches.push_back(match);
-                    request.set_uri_matches(matches);
-                    func = get_route.second;
+                    r = request(r.get_remote_ip(), r.get_remote_port(),
+                                r.get_method(), r.get_uri(), r.get_http_version(),
+                                r.get_headers(),
+                                r.get_body(),
+                                matches);
+                    func = route.second;
                     break;
                 }
             }
+        }
+        else
+        {
+            // TODO
+        }
 
         if (func)
         {
-            response response(status_code::ok, "");
-            context context(request, response);
-            (*func)(context);
-            priv::send_response(socket, context);
+            const auto response = (*func)(r);
+            priv::send_response(socket, response);
         }
 
         socket_impl::close(socket);
@@ -179,7 +201,7 @@ namespace priv
         std::string& uri,
         std::string& http_version)
     {
-        auto last = '\0';
+        std::optional<char> last;
         auto method_flag = true;
         std::vector<char> buffer;
 
@@ -191,33 +213,30 @@ namespace priv
             if (size_received == socket_impl::socket_error)
                 throw std::runtime_error("recv failed: " + socket_impl::get_error());
             if (size_received == 0)
-                throw std::runtime_error("parseRequestLine failed: recv returned 0");
-
-
-            buffer.push_back(current);
+                throw std::runtime_error("parse_request_line failed: recv returned 0");
 
             if (current == ' ')
             {
                 if (method_flag)
                 {
                     method = std::string(buffer.data(), buffer.size());
-
                     buffer.clear();
                     method_flag = false;
                 }
                 else
                 {
                     uri = std::string(buffer.data(), buffer.size());
-
                     buffer.clear();
                 }
             }
             else if (last == '\r' && current == '\n')
             {
+                buffer.pop_back(); // pop '\r'
                 http_version = std::string(buffer.data(), buffer.size());
 
                 break;
             }
+            else buffer.push_back(current);
 
             last = current;
         }
@@ -225,7 +244,7 @@ namespace priv
 
     void parse_headers(const socket_handle socket, std::map<std::string, std::string>& headers)
     {
-        auto last = '\0';
+        std::optional<char> last;
         auto field_flag = true;
         std::string field_name;
         std::vector<char> buffer;
@@ -238,27 +257,24 @@ namespace priv
             if (size_received == socket_impl::socket_error)
                 throw std::runtime_error("recv failed: " + socket_impl::get_error());
             if (size_received == 0)
-                throw std::runtime_error("parseHeaders failed: recv returned 0");
-
-            buffer.push_back(current);
+                throw std::runtime_error("parse_headers failed: recv returned 0");
 
             if (current == ':' && field_flag)
             {
                 field_name = utils::trim(std::string(buffer.data(), buffer.size()));
-
                 buffer.clear();
                 field_flag = false;
             }
             else if (last == '\r' && current == '\n')
             {
-                if (buffer.size() == 2) break;
-
+                if (buffer.size() == 1 && buffer.back() == '\r') break;
+                buffer.pop_back(); // pop '\r'
                 headers[field_name] = utils::trim(std::string(buffer.data(), buffer.size()));
-
                 buffer.clear();
                 field_name.clear();
                 field_flag = true;
             }
+            else buffer.push_back(current);
 
             last = current;
         }
@@ -277,22 +293,22 @@ namespace priv
             if (size_received == socket_impl::socket_error)
                 throw std::runtime_error("recv failed: " + socket_impl::get_error());
             if (size_received == 0)
-                throw std::runtime_error("parseBody failed: recv returned 0");
+                throw std::runtime_error("parse_body failed: recv returned 0");
 
             all_size_received += size_received;
             body.insert(body.end(), buffer, buffer + size_received);
         }
     }
 
-    request receive_request(const socket_handle socket)
+    request receive_request(const socket_handle socket, const std::string& remote_ip, const uint16_t remote_port)
     {
         std::string method;
         std::string uri;
         std::string http_verson;
-        priv::parse_request_line(socket, method, uri, http_verson);
+        parse_request_line(socket, method, uri, http_verson);
 
         std::map<std::string, std::string> headers;
-        priv::parse_headers(socket, headers);
+        parse_headers(socket, headers);
 
         std::vector<char> body;
         const auto it = headers.find("Content-Length");
@@ -301,28 +317,33 @@ namespace priv
             size_t length;
             std::stringstream(it->second) >> length;
 
-            priv::parse_body(socket, body, length);
+            parse_body(socket, body, length);
         }
         const auto optional_body = !body.empty() ? body : std::optional<std::vector<char>>{};
 
-        return request(method, uri, http_verson, headers, optional_body, std::nullopt);
+        return request(remote_ip, remote_port, method, uri, http_verson, headers, optional_body, std::nullopt);
     }
 
-    void send_response(const socket_handle socket, context& context)
+    void send_response(const socket_handle socket, const response& response)
     {
-        const auto code = static_cast<std::underlying_type_t<status_code>>(context.get_response().get_status_code());
-        const auto code_phrase = utils::get_reason_phrase(context.get_response().get_status_code());
+        const auto code = static_cast<std::underlying_type_t<status_code>>(response.get_status_code());
+        const auto code_phrase = utils::get_reason_phrase(response.get_status_code());
 
-        auto response = "HTTP/1.1 " + std::to_string(code) + " " + code_phrase + "\r\n";
-        response += context.get_response().get_content();
+        std::stringstream stream;
+        stream << "HTTP/1.1 " + std::to_string(code) + " " + code_phrase + "\r\n";
+        for (const auto& header : response.get_headers())
+            stream << header.first << ": " << header.second << "\r\n";
+        stream << "\r\n";
+        if (response.get_body()) stream << *response.get_body();
+        const auto response_str = stream.str();
 
         size_t all_size_sent = 0;
-        const auto length = response.length();
+        const auto length = response_str.length();
         auto bytes_left = length;
 
         while (all_size_sent < length)
         {
-            const auto size_sent = send(socket, response.c_str() + all_size_sent, bytes_left, 0);
+            const auto size_sent = send(socket, response_str.c_str() + all_size_sent, bytes_left, 0);
             if (size_sent == socket_impl::socket_error)
                 throw std::runtime_error("send failed: " + socket_impl::get_error());
 
