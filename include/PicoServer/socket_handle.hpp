@@ -7,7 +7,7 @@
 #include <WinSock2.h>
 typedef SOCKET socket_handle;
 #else
-    typedef int socket_handle;
+typedef int socket_handle;
 #endif
 
 #endif

@@ -62,9 +62,9 @@ namespace ps
             }
 
 #ifdef PS_WINDOWS
-            auto constexpr on = '1';
+            constexpr auto on = '1';
 #else
-            auto constexpr on = 1;
+            constexpr auto on = 1;
 #endif
             if (setsockopt(listener_, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == socket_impl::socket_error)
                 throw std::runtime_error("setsockopt failed: " + socket_impl::get_error());
@@ -93,7 +93,7 @@ namespace ps
             socket_impl::close(listener_);
     }
 
-    void server::add_default_route(const std::function<response(const request&)>& func)
+    void server::map_default_route(const std::function<response(const request&)>& func)
     {
         default_route_ = func;
     }
@@ -120,7 +120,7 @@ namespace ps
 #else
             socklen_t length = sizeof connectorAddr;
 #endif
-            auto connection_socket = accept(listener_, reinterpret_cast<sockaddr*>(&connector_addr), &length);
+            const auto connection_socket = accept(listener_, reinterpret_cast<sockaddr*>(&connector_addr), &length);
 
             if (connection_socket == socket_impl::invalid_socket)
                 throw std::runtime_error("accept failed: " + socket_impl::get_error());
@@ -159,7 +159,7 @@ namespace ps
 
         if (r.get_method() == "GET" || r.get_method() == "POST")
         {
-            auto routes = r.get_method() == "GET" ? get_routes_ : post_routes_;
+            const auto routes = r.get_method() == "GET" ? get_routes_ : post_routes_;
             for (const auto& route : routes)
             {
                 std::smatch sm;
@@ -178,10 +178,8 @@ namespace ps
                 }
             }
         }
-        else
-        {
-            // TODO
-        }
+
+        if (!func && default_route_) func = *default_route_;
 
         if (func)
         {
@@ -321,7 +319,7 @@ namespace priv
         }
         const auto optional_body = !body.empty() ? body : std::optional<std::vector<char>>{};
 
-        return request(remote_ip, remote_port, method, uri, http_verson, headers, optional_body, std::nullopt);
+        return request(remote_ip, remote_port, method, uri, http_verson, headers, optional_body, {});
     }
 
     void send_response(const socket_handle socket, const response& response)
@@ -330,7 +328,7 @@ namespace priv
         const auto code_phrase = utils::get_reason_phrase(response.get_status_code());
 
         std::stringstream stream;
-        stream << "HTTP/1.1 " + std::to_string(code) + " " + code_phrase + "\r\n";
+        stream << "HTTP/1.1 " << std::to_string(code) << " " << code_phrase << "\r\n";
         for (const auto& header : response.get_headers())
             stream << header.first << ": " << header.second << "\r\n";
         stream << "\r\n";

@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include "PicoServer/config.hpp"
 #include "PicoServer/non_copyable.hpp"
@@ -20,7 +21,7 @@ namespace ps
 
         virtual ~server();
 
-        void add_default_route(const std::function<response(const request&)>& func);
+        void map_default_route(const std::function<response(const request&)>& func);
 
         void map_get_route(const std::string& template_name, const std::function<response(const request&)>& func);
 
@@ -33,7 +34,7 @@ namespace ps
     private:
         void run(socket_handle socket, const std::string& ip, uint16_t port) const;
 
-        std::function<response(const request&)> default_route_;
+        std::optional<std::function<response(const request&)>> default_route_;
 
         std::map<std::string, std::function<response(const request&)>> get_routes_;
 
