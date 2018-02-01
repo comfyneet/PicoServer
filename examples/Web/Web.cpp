@@ -1,5 +1,5 @@
 #include <exception>
-#include <filesystem>
+#include <experimental/filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -11,7 +11,7 @@ int main()
 {
     try
     {
-        ps::server server(80, 10);
+        ps::server server(2018, 10);
 
         server.map_post_route("^/upload$", [](const ps::request& request)
         {
@@ -30,10 +30,10 @@ int main()
             else return ps::response(ps::status_code::bad_request, {}, {});
         });
 
-        server.map_get_route("^/request-info", [](const ps::request& request)
+        server.map_get_route("^/request-info$", [](const ps::request& request)
         {
             std::stringstream body_stream;
-            body_stream << "<!DOCTYPE html><html><body>";
+            body_stream << "<!DOCTYPE html><html><head><meta charset=utf-8></head><body>";
             body_stream << "<h1>" << request.get_remote_ip() << ":" << std::to_string(request.get_remote_port()) <<
                 "</h1>";
             body_stream << "<h2>"
@@ -85,7 +85,7 @@ int main()
                 const auto body = body_stream.str();
 
                 std::map<std::string, std::string> headers;
-                headers["Content-Length"] = path.extension() == ".html" ? "text/html" : "text/plain";
+                headers["Content-Type"] = path.extension() == ".html" ? "text/html" : "text/plain";
                 headers["Content-Length"] = std::to_string(body.length());
 
                 return ps::response(ps::status_code::ok, headers, body);
@@ -93,8 +93,8 @@ int main()
             else
             {
                 std::stringstream body_stream;
-                body_stream << "<!DOCTYPE html><html><body>";
-                body_stream << "<h1>File \"" << std::experimental::filesystem::canonical(path) << "\" not found.</h1>";
+                body_stream << "<!DOCTYPE html><html><head><meta charset=utf-8></head><body>";
+                body_stream << "<h1>File " << std::experimental::filesystem::absolute(path) << " not found.</h1>";
                 body_stream << "</body></html>";
                 const auto body = body_stream.str();
 

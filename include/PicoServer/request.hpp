@@ -36,6 +36,7 @@ namespace ps
         }
 
         request(const request& request) :
+            non_copyable{},
             remote_ip_{request.remote_ip_},
             remote_port_{request.remote_port_},
             method_{request.method_},

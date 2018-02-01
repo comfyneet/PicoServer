@@ -1,7 +1,6 @@
 #include "Win32/socket_impl.hpp"
 #include <iostream>
 #include <stdexcept>
-#include <string>
 
 namespace priv
 {

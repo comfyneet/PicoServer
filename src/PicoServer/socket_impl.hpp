@@ -6,7 +6,7 @@
 #ifdef PS_WINDOWS
 #  include "Win32/socket_impl.hpp"
 #else
-#  error Linux
+#  include "Unix/socket_impl.hpp"
 #endif
 
 #endif

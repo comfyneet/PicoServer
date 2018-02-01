@@ -8,6 +8,11 @@
 #include <vector>
 #ifdef PS_WINDOWS
 #  include <WS2tcpip.h>
+#else
+#  include <arpa/inet.h>
+#  include <netdb.h>
+#  include <sys/socket.h>
+#  include <sys/types.h>
 #endif
 #include "PicoServer/request.hpp"
 #include "PicoServer/response.hpp"
@@ -118,7 +123,7 @@ namespace ps
 #ifdef PS_WINDOWS
             int length = sizeof connector_addr;
 #else
-            socklen_t length = sizeof connectorAddr;
+            socklen_t length = sizeof connector_addr;
 #endif
             const auto connection_socket = accept(listener_, reinterpret_cast<sockaddr*>(&connector_addr), &length);
 

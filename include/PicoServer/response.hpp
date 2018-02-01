@@ -28,10 +28,11 @@ namespace ps
 
         virtual ~response() = default;
 
-        response(const response& response)
+        response(const response& response) :
+            non_copyable{},
+            status_code_{response.status_code_},
+            body_{response.body_}
         {
-            status_code_ = response.status_code_;
-            body_ = response.body_;
         }
 
         response& operator=(response&& response) noexcept

@@ -8,6 +8,9 @@ file(GLOB WEB_SOURCES "*.cpp")
 
 add_executable(Web ${WEB_SOURCES})
 
+if (UNIX)
+   target_link_libraries(Web stdc++fs)
+endif()
 target_link_libraries(Web PicoServer)
 
 install(TARGETS Web DESTINATION ${INSTALL_DIR})

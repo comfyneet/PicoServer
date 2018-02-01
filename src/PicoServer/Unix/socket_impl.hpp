@@ -1,5 +1,5 @@
-#ifndef PS_WIN32_SOCKET_IMPL_HPP
-#define PS_WIN32_SOCKET_IMPL_HPP
+#ifndef PS_UNIX_SOCKET_IMPL_HPP
+#define PS_UNIX_SOCKET_IMPL_HPP
 
 #include <string>
 #include "PicoServer/socket_handle.hpp"
@@ -9,9 +9,9 @@ namespace ps
     class socket_impl
     {
     public:
-        static constexpr socket_handle invalid_socket = INVALID_SOCKET;
+        static constexpr socket_handle invalid_socket = -1;
 
-        static constexpr int socket_error = SOCKET_ERROR;
+        static constexpr int socket_error = -1;
 
         static void close(socket_handle handle);
 
